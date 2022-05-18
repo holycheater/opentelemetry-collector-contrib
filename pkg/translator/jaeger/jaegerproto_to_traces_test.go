@@ -178,6 +178,9 @@ func TestJTagsToInternalAttributes(t *testing.T) {
 
 func TestProtoToTraces(t *testing.T) {
 
+	tdSpanProcess := generateTracesWithLibraryInfo()
+	tdSpanProcess.ResourceSpans().At(0).Resource().Attributes().UpsertString("service.name", "test")
+
 	tests := []struct {
 		name string
 		jb   []*model.Batch
@@ -250,6 +253,17 @@ func TestProtoToTraces(t *testing.T) {
 					},
 				}},
 			td: generateTracesTwoSpansWithFollower(),
+		},
+		{
+			name: "span-process",
+			jb: []*model.Batch{
+				{
+					Spans: []*model.Span{
+						generateProtoSpanWithProcess(),
+					},
+				},
+			},
+			td: tdSpanProcess,
 		},
 	}
 
@@ -621,6 +635,14 @@ func generateProtoSpan() *model.Span {
 			},
 		},
 	}
+}
+
+func generateProtoSpanWithProcess() *model.Span {
+	span := generateProtoSpanWithLibraryInfo("io.opentelemetry.test")
+	span.Process = &model.Process{
+		ServiceName: "test",
+	}
+	return span
 }
 
 func generateProtoSpanWithLibraryInfo(libraryName string) *model.Span {

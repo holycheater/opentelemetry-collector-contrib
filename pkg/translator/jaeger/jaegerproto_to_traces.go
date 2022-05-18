@@ -41,29 +41,32 @@ func ProtoToTraces(batches []*model.Batch) (ptrace.Traces, error) {
 	}
 
 	rss := traceData.ResourceSpans()
-	rss.EnsureCapacity(len(batches))
+	var sz int
+	for _, b := range batches {
+		sz += len(b.Spans)
+	}
+	rss.EnsureCapacity(sz)
 
 	for _, batch := range batches {
 		if batch.GetProcess() == nil && len(batch.GetSpans()) == 0 {
 			continue
 		}
 
-		protoBatchToResourceSpans(*batch, rss.AppendEmpty())
+		for _, span := range batch.Spans {
+			if span.Process == nil {
+				span.Process = batch.Process
+			}
+			protoSpanToResourceSpans(span, rss.AppendEmpty())
+		}
 	}
 
 	return traceData, nil
 }
 
-func protoBatchToResourceSpans(batch model.Batch, dest ptrace.ResourceSpans) {
-	jSpans := batch.GetSpans()
+func protoSpanToResourceSpans(span *model.Span, dest ptrace.ResourceSpans) {
+	jProcessToInternalResource(span.Process, dest.Resource())
 
-	jProcessToInternalResource(batch.GetProcess(), dest.Resource())
-
-	if len(jSpans) == 0 {
-		return
-	}
-
-	groupByLibrary := jSpansToInternal(jSpans)
+	groupByLibrary := jSpansToInternal([]*model.Span{span})
 	ilss := dest.ScopeSpans()
 	for library, spans := range groupByLibrary {
 		ils := ilss.AppendEmpty()
@@ -106,8 +109,8 @@ func translateHostnameAttr(attrs pcommon.Map) {
 	hostname, hostnameFound := attrs.Get("hostname")
 	_, convHostNameFound := attrs.Get(conventions.AttributeHostName)
 	if hostnameFound && !convHostNameFound {
-		attrs.Insert(conventions.AttributeHostName, hostname)
 		attrs.Remove("hostname")
+		attrs.Insert(conventions.AttributeHostName, hostname)
 	}
 }
 
@@ -116,8 +119,8 @@ func translateJaegerVersionAttr(attrs pcommon.Map) {
 	jaegerVersion, jaegerVersionFound := attrs.Get("jaeger.version")
 	_, exporterVersionFound := attrs.Get(occonventions.AttributeExporterVersion)
 	if jaegerVersionFound && !exporterVersionFound {
-		attrs.InsertString(occonventions.AttributeExporterVersion, "Jaeger-"+jaegerVersion.StringVal())
 		attrs.Remove("jaeger.version")
+		attrs.InsertString(occonventions.AttributeExporterVersion, "Jaeger-"+jaegerVersion.StringVal())
 	}
 }
 
